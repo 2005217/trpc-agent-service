@@ -61,8 +61,12 @@ def create_storage(tenant_config: TenantConfig) -> StorageAdapter:
                 "（在 tenants.yaml 或环境变量中填写，如 mysql+pymysql://user:pass@host/db）"
             )
         return StorageAdapter(
-            session_service=SqlSessionService(db_url=url, is_async=True),
-            memory_service=SqlMemoryService(db_url=url, enabled=True, is_async=True),
+            # is_async=False：框架 _get_session 给 update_time 赋 SQL 表达式（func.now()），
+            # flush 后该属性必然过期，后续同步读属性在异步引擎上抛 MissingGreenlet
+            # （框架异步 SQL 路径的已知缺陷）。同步模式是官方支持路径，无此问题；
+            # 代价是事件循环内的阻塞 IO，演示/单机规模可接受，多节点生产需关注。
+            session_service=SqlSessionService(db_url=url, is_async=False),
+            memory_service=SqlMemoryService(db_url=url, enabled=True, is_async=False),
             backend=backend,
         )
     # 默认内存后端

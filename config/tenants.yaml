@@ -11,7 +11,7 @@ tenants:
       api_key: ""
       base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
     storage:
-      session_backend: "in_memory"
+      session_backend: "sql"
     tools:
       allowed_tools:
         - "query_order"

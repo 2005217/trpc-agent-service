@@ -34,12 +34,15 @@ def _apply_env_overrides(cfg: TenantConfig) -> TenantConfig:
     key = os.getenv("KEY") or os.getenv("API_KEY")
     url = os.getenv("URL") or os.getenv("BASE_URL")
     model = os.getenv("MODEL")
+    sql_url = os.getenv("SQL_URL")
     if key:
         cfg.model.api_key = key
     if url:
         cfg.model.base_url = url
     if model:
         cfg.model.model_name = model
+    if sql_url and not cfg.storage.sql_url:
+        cfg.storage.sql_url = sql_url
     return cfg
 
 
