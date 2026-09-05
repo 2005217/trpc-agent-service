@@ -53,3 +53,12 @@ storage:
 
 - 后端切换只改租户 YAML 的 `session_backend` 与连接串，热加载生效；数据迁移按 `docs/sync-and-idempotency.md` §5 执行。
 - 平台元数据表（tenant/channel_binding/audit_log/idempotency）始终在 SQL，不随后端切换。
+
+## 3.1 租户后端选型的边界
+
+租户在 tenants.yaml 中可选的是其**数据资产**的存储（Session/Memory：
+in_memory/redis/sql）；平台的**运行时治理状态**（预算计数、去重、绑定
+缓存）由平台统一决定。预算计数使用 Redis 原子 INCR（热路径、按日过期、
+双键 TTL 48h）；无 Redis 的多节点部署下降级为节点内存计数（配额近似
+生效）。SQL 不做计数后端；按租户成本报表由定时快照/审计聚合落表实现
+——计数与报表分离。
