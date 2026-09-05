@@ -3,6 +3,7 @@
 .DS_Store
 *.lock
 *.log
+.env
 
 *.egg-info
 
@@ -25,3 +26,7 @@ pyrightconfig.json
 
 # spec-workflow tool artifacts
 .spec-workflow
+
+# 运行时产物
+.server.pid
+data/audit/*.jsonl

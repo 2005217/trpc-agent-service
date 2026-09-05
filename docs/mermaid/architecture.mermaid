@@ -1,0 +1,61 @@
+%% 系统架构图：多租户节点化 Agent 部署平台
+flowchart TB
+    subgraph Clients["接入方"]
+        WEB["Web UI<br/>(FastAPI 静态页)"]
+        WECOM["企业微信"]
+    end
+
+    subgraph GatewayLayer["Agent Gateway（无状态，可水平扩展）"]
+        CHAT["POST /api/v1/chat"]
+        WEBHOOK["POST /api/v1/channels/wecom/webhook/{tenant_id}"]
+        ADMIN["Admin API<br/>租户 CRUD / 审计查询"]
+    end
+
+    subgraph Platform["平台层"]
+        ROUTER["SessionRouter<br/>sha1(tenant:channel:user[:chat])"]
+        BUDGET["BudgetManager<br/>租户预算前置校验"]
+        AUTHZ["UserAuthz<br/>channel_binding 校验"]
+        DEDUPE["Deduper<br/>MsgId 去重"]
+    end
+
+    subgraph WorkerLayer["Agent Worker（无状态）"]
+        RUNNER["AgentRunner + Runner"]
+        AGENT["LlmAgent<br/>(租户模型/提示词/工具)"]
+        subgraph Filters["治理 Filter 链 (TOOL 层)"]
+            F1["tool_whitelist"]
+            F2["pii_mask"]
+            F3["budget_limit"]
+            F4["dangerous_confirm"]
+        end
+        TOOLS["FunctionTool×N"]
+    end
+
+    subgraph StorageLayer["Storage Adapter"]
+        SF["storage/factory.py<br/>按租户装配后端"]
+        REDIS[("Redis<br/>Session/Memory/幂等/预算")]
+        SQL[("MySQL<br/>Session/Memory/元数据/审计")]
+        MEM[("InMemory<br/>(开发默认)")]
+    end
+
+    subgraph Observability["Telemetry & Audit"]
+        OTEL["OTel SDK<br/>invocation/call_llm/execute_tool span"]
+        OTLP["OTLP Collector<br/>(Jaeger/Tempo)"]
+        AUDIT["AuditService<br/>redact → JSONL/SQL"]
+    end
+
+    WEB --> CHAT
+    WECOM --> WEBHOOK
+    CHAT --> ROUTER --> BUDGET
+    WEBHOOK --> DEDUPE --> AUTHZ --> ROUTER
+    BUDGET --> RUNNER
+    RUNNER --> AGENT --> TOOLS
+    F1 --> F2 --> F3 --> F4
+    AGENT -.-> F1
+    SF --> REDIS
+    SF --> SQL
+    SF --> MEM
+    RUNNER --> SF
+    RUNNER -. trace_id 贯穿 .-> OTEL --> OTLP
+    TOOLS --> AUDIT
+    CHAT --> AUDIT
+    ADMIN --> SQL

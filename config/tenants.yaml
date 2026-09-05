@@ -1,0 +1,46 @@
+tenants:
+  - tenant_id: "tenant_001"
+    name: "客服团队"
+    app:
+      app_name: "customer_service"
+      description: "客服团队的AI助手"
+      instruction: "你是客服助手，帮助用户解答订单和物流问题。"
+    model:
+      provider: "qwen"
+      model_name: "qwen3.7-flash"
+      api_key: ""
+      base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    storage:
+      session_backend: "in_memory"
+    tools:
+      allowed_tools:
+        - "query_order"
+        - "check_logistics"
+    audit:
+      enabled: true
+      mask_pii: true
+      retention_days: 90
+    daily_api_calls: 10000
+
+  - tenant_id: "tenant_002"
+    name: "研发团队"
+    app:
+      app_name: "dev_assistant"
+      description: "研发团队的AI助手"
+      instruction: "你是研发助手，帮助开发者解答技术问题。"
+    model:
+      provider: "qwen"
+      model_name: "qwen3.7-flash"
+      api_key: ""
+      base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    storage:
+      session_backend: "in_memory"
+    tools:
+      allowed_tools:
+        - "search_code"
+        - "query_docs"
+    audit:
+      enabled: true
+      mask_pii: false
+      retention_days: 30
+    daily_api_calls: 5000
