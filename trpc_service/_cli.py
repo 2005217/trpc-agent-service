@@ -28,5 +28,19 @@ def serve():
     uvicorn.run("trpc_service.web.app:app", host=s.host, port=s.port)
 
 
+@app.command()
+def migrate():
+    """执行 Alembic 迁移到最新版本（平台表建表/变更）"""
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+
+    ini = Path(__file__).resolve().parent.parent / "alembic.ini"
+    cfg = Config(str(ini))
+    command.upgrade(cfg, "head")
+    typer.echo("migration done: upgrade head")
+
+
 if __name__ == "__main__":
     app()  # ⚠️ 原来缺这个：python -m 方式执行时，没有入口调用 app() 什么都不会发生

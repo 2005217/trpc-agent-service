@@ -4,6 +4,7 @@
     .venv/Scripts/python.exe -m trpc_service.web.app
 """
 from __future__ import annotations
+import os
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -42,6 +43,7 @@ class AppState:
     def __init__(self) -> None:
         self.config_manager = ConfigManager()
         self.runners: Dict[str, AgentRunner] = {}
+        self.database = None   # ②生产级：平台 Database（lifespan 注入）
 
     def build_runner(self, tenant_id: str) -> Optional[AgentRunner]:
         """按租户配置装配 Agent + 存储后端并构建 Runner。"""
@@ -67,7 +69,19 @@ async def lifespan(app: FastAPI):
 
     setup_telemetry()  # OTEL_ENABLED=1 时生效，否则 no-op
 
-    # 启动时执行一次审计保留期清理（周期任务/多节点守卫：已规划，暂缓）
+    # ---- 平台数据库（②生产级：显式 Database + 依赖注入） ----
+    from trpc_service.storage.database import Database, platform_db_url
+
+    db_url = platform_db_url()
+    if db_url:
+        state.database = Database(db_url)
+        audit_service.attach(state.database)
+        await audit_service.start()
+        # AUTO_MIGRATE=1 时启动即把 schema 迁移到最新；生产建议显式 `cli migrate`
+        if os.getenv("AUTO_MIGRATE", "").lower() in ("1", "true"):
+            _run_migrations()
+
+    # 启动时执行一次审计保留期清理（文件后端；SQL 后端的清理在②收尾接 DELETE）
     retention_map = {
         t.tenant_id: t.audit.retention_days
         for t in state.config_manager.all().values()
@@ -81,6 +95,21 @@ async def lifespan(app: FastAPI):
     yield
     for runner in state.runners.values():
         await runner.close()
+    await audit_service.stop()   # 关停前把审计缓冲刷净
+    if state.database is not None:
+        state.database.dispose()
+
+
+def _run_migrations() -> None:
+    """程序化执行 Alembic 迁移到 head（与 `python -m trpc_service._cli migrate` 等价）。"""
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config(str(PROJECT_ROOT / "alembic.ini"))
+    command.upgrade(cfg, "head")
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 app = FastAPI(title="trpc agent service", version=__version__, lifespan=lifespan)
