@@ -1,5 +1,6 @@
 """预算 Redis 双后端测试（fakeredis 模拟，无需真实 Redis 服务）。"""
 import pytest
+import redis
 from fakeredis import FakeRedis
 
 from trpc_service.gateway.budget import BudgetExceeded, BudgetManager
@@ -46,3 +47,26 @@ def test_memory_fallback_when_no_redis():
     m = BudgetManager()
     m.record("tenant_002", api_calls=5)
     assert m.usage_of("tenant_002").api_calls == 5
+
+
+class _ExplodingRedis:
+    """所有操作抛 RedisError 的假客户端（模拟运行期 Redis 宕机）。"""
+
+    def __getattr__(self, name):
+        def _raise(*args, **kwargs):
+            raise redis.RedisError("connection lost")
+        return _raise
+
+
+def test_runtime_redis_failure_degrades_to_memory():
+    """运行期 Redis 故障 → 永久降级内存，服务不中断（budget.py 修复的回归测试）。
+
+    修复前的行为：check/record 直接抛 ConnectionError 穿透到聊天接口变 500。
+    """
+    m = BudgetManager()
+    m._redis = _ExplodingRedis()
+    m.record("tenant_002", api_calls=2)   # Redis 炸 → 降级 → 本次走内存
+    assert m._redis is None, "故障后应永久降级，不再反复撞死掉的 Redis"
+    m.record("tenant_002", api_calls=3)   # 后续操作全走内存
+    assert m.usage_of("tenant_002").api_calls == 5
+    m.check("tenant_002")                 # 不应抛任何 Redis 异常
