@@ -8,24 +8,38 @@ app = typer.Typer(help="trpc-agent-service 命令行工具", no_args_is_help=Tru
 def version():
     """显示版本号"""
     from trpc_service.version import __version__
+
     typer.echo(f"trpc agent service version: {__version__}")
 
 
 @app.command()
 def tenants():
-    """列出全部租户（直接读配置文件，不依赖服务进程）"""
-    from trpc_service.config.loader import load_config  # ⚠️ 原来写成 trpc_service.loader，包路径错了
+    """列出全部租户（读 YAML 引导配置，不依赖服务进程）"""
+    from trpc_service.config.loader import load_config
+
     for cfg in load_config().values():
-        typer.echo(f"{cfg.tenant_id}\t{cfg.name}\t{cfg.app.app_name}\t{cfg.storage.session_backend}")
+        typer.echo(
+            f"{cfg.tenant_id}\t{cfg.name}\t{cfg.app.app_name}\t{cfg.storage.session_backend}"
+        )
 
 
 @app.command()
 def serve():
-    """启动服务（等价 start.sh）"""
+    """启动服务（inline 模式，等价 start.sh）"""
     import uvicorn
+
     from trpc_service.config.settings import ServerConfig
+
     s = ServerConfig()
     uvicorn.run("trpc_service.web.app:app", host=s.host, port=s.port)
+
+
+@app.command()
+def worker():
+    """启动队列消费 Worker（需 QUEUE_MODE=redis 与 REDIS_URL）"""
+    from trpc_service.worker import main
+
+    main()
 
 
 @app.command()
@@ -43,4 +57,4 @@ def migrate():
 
 
 if __name__ == "__main__":
-    app()  # ⚠️ 原来缺这个：python -m 方式执行时，没有入口调用 app() 什么都不会发生
+    app()

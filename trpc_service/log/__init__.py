@@ -1,10 +1,4 @@
-"""统一日志入口：级别走环境变量，格式带上下文键值。
-
-用法：
-    from trpc_service.log import get_logger
-    logger = get_logger("web.chat")
-    logger.info("chat done tenant=%s trace=%s", tenant_id, trace_id)
-"""
+"""统一日志入口：级别走环境变量，格式带上下文键值。"""
 import logging
 import os
 

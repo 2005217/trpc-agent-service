@@ -1,68 +1,81 @@
-"""企业微信回调加解密（官方协议实现）。
-
-- 验签：sha1(sorted([token, timestamp, nonce, encrypt]))
-- 解密：AES-256-CBC（IV=key[:16]），明文 = random(16B) + len(4B BE) + msg + receiveid
-- 加密：随机前缀 + 长度 + 消息 + receiveid，PKCS7 填充后 AES 加密
-"""
+"""企业微信回调加解密官方协议实现。"""
 from __future__ import annotations
 
 import base64
 import hashlib
 import os
 import struct
-from typing import Tuple
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 
 class WeComCryptoError(Exception):
-    """企业微信加解密失败。"""
+    """加解密或密钥格式错误。"""
+
+
+def _decode_key(encoding_aes_key: str) -> bytes:
+    try:
+        key = base64.b64decode(encoding_aes_key + "=")
+    except Exception as exc:
+        raise WeComCryptoError(f"invalid EncodingAESKey: {exc}") from exc
+    if len(key) != 32:
+        raise WeComCryptoError("EncodingAESKey must decode to 32 bytes")
+    return key
 
 
 def sha1_signature(token: str, timestamp: str, nonce: str, encrypt: str) -> str:
-    """官方签名算法：字典序拼接后 SHA1。"""
-    raw = "".join(sorted([token or "", timestamp or "", nonce or "", encrypt or ""]))
-    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+    """官方签名算法：sha1(sort(token, timestamp, nonce, encrypt))。"""
+    items = sorted([token or "", timestamp or "", nonce or "", encrypt or ""])
+    return hashlib.sha1("".join(items).encode()).hexdigest()
 
 
-def verify_signature(token: str, timestamp: str, nonce: str, encrypt: str, msg_signature: str) -> bool:
-    return sha1_signature(token, timestamp, nonce, encrypt) == (msg_signature or "")
+def verify_signature(token: str, timestamp: str, nonce: str, encrypt: str, signature: str) -> bool:
+    return sha1_signature(token, timestamp, nonce, encrypt) == (signature or "")
 
 
-def _aes_key(encode_aes_key: str) -> bytes:
-    try:
-        return base64.b64decode(encode_aes_key + "=")
-    except Exception as ex:  # noqa: BLE001
-        raise WeComCryptoError(f"EncodingAESKey 非法: {ex}") from ex
+def _pkcs7_pad(data: bytes) -> bytes:
+    pad = 32 - len(data) % 32
+    return data + bytes([pad]) * pad
 
 
-def decrypt_message(encode_aes_key: str, encrypt_b64: str) -> Tuple[str, str]:
-    """解密回调报文，返回 (消息 XML, receiveid)。"""
-    key = _aes_key(encode_aes_key)
+def _pkcs7_unpad(data: bytes) -> bytes:
+    pad = data[-1]
+    if pad < 1 or pad > 32:
+        raise WeComCryptoError("invalid padding")
+    return data[:-pad]
+
+
+def encrypt_message(encoding_aes_key: str, plain: str, receiveid: str) -> str:
+    """明文 → AES-256-CBC → base64。"""
+    key = _decode_key(encoding_aes_key)
+    iv = key[:16]
+    raw = (
+        os.urandom(16)
+        + struct.pack("!I", len(plain.encode("utf-8")))
+        + plain.encode("utf-8")
+        + receiveid.encode("utf-8")
+    )
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+    encryptor = cipher.encryptor()
+    encrypted = encryptor.update(_pkcs7_pad(raw)) + encryptor.finalize()
+    return base64.b64encode(encrypted).decode()
+
+
+def decrypt_message(encoding_aes_key: str, encrypt_b64: str) -> tuple[str, str]:
+    """base64 → AES-256-CBC → (plain_xml, receiveid)。"""
+    key = _decode_key(encoding_aes_key)
+    iv = key[:16]
     try:
         cipher_text = base64.b64decode(encrypt_b64)
-        decryptor = Cipher(algorithms.AES(key), modes.CBC(key[:16])).decryptor()
-        padded = decryptor.update(cipher_text) + decryptor.finalize()
-    except Exception as ex:  # noqa: BLE001
-        raise WeComCryptoError(f"AES 解密失败: {ex}") from ex
-    pad = padded[-1]
-    if not 1 <= pad <= 32:
-        raise WeComCryptoError("PKCS7 填充非法")
-    plain = padded[:-pad]
-    msg_len = struct.unpack(">I", plain[16:20])[0]
-    msg = plain[20:20 + msg_len]
-    receiveid = plain[20 + msg_len:]
-    return msg.decode("utf-8"), receiveid.decode("utf-8")
-
-
-def encrypt_message(encode_aes_key: str, message: str, receiveid: str) -> str:
-    """加密回复报文，返回 base64 密文。"""
-    key = _aes_key(encode_aes_key)
-    msg_bytes = message.encode("utf-8")
-    receive_bytes = receiveid.encode("utf-8")
-    payload = os.urandom(16) + struct.pack(">I", len(msg_bytes)) + msg_bytes + receive_bytes
-    pad_len = 32 - (len(payload) % 32)
-    payload += bytes([pad_len]) * pad_len
-    encryptor = Cipher(algorithms.AES(key), modes.CBC(key[:16])).encryptor()
-    cipher_text = encryptor.update(payload) + encryptor.finalize()
-    return base64.b64encode(cipher_text).decode("utf-8")
+    except Exception as exc:
+        raise WeComCryptoError(f"invalid base64: {exc}") from exc
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+    decryptor = cipher.decryptor()
+    plain = decryptor.update(cipher_text) + decryptor.finalize()
+    data = _pkcs7_unpad(plain)
+    if len(data) < 20:
+        raise WeComCryptoError("decrypted content too short")
+    msg_len = struct.unpack("!I", data[16:20])[0]
+    plain_xml = data[20:20 + msg_len].decode("utf-8", errors="replace")
+    receiveid = data[20 + msg_len:].decode("utf-8", errors="replace")
+    return plain_xml, receiveid

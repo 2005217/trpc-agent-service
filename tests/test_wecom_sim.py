@@ -9,8 +9,8 @@ from trpc_service.channels import wecom_crypto
 from trpc_service.channels.base import WebhookRequest
 from trpc_service.channels.wecom import WeComAdapter
 from trpc_service.config.tenant_config import ChannelConfig, TenantConfig
-from trpc_service.filter.user_authz import user_authz
-from trpc_service.gateway.router import SessionRouter
+from trpc_service.tenant.governance.user_authz import user_authz
+from trpc_service.agent.routing import SessionRouter
 
 
 def _make_aes_key() -> str:
@@ -144,3 +144,28 @@ async def test_group_chat_session_isolated():
     session_room = SessionRouter.session_id("tenant_wecom_test", "wecom", "userB", chat_id="room9")
     assert runner.calls[0]["session_id"] == session_single
     assert session_single != session_room
+
+
+async def test_revoke_message_silent_ack():
+    """撤回事件：静默 ACK，不回复、不触发 Agent。"""
+    token, aes_key = _make_aes_key(), _make_aes_key()
+    adapter, runner = _build_adapter(token, aes_key)
+    nonce = "n4"
+    inner = (
+        "<xml>"
+        f"<ToUserName><![CDATA[corp]]></ToUserName>"
+        f"<FromUserName><![CDATA[userC]]></FromUserName>"
+        f"<CreateTime>{int(time.time())}</CreateTime>"
+        "<MsgType><![CDATA[revoke]]></MsgType>"
+        "<RevokedMsg><Content>撤回了一条消息</Content></RevokedMsg>"
+        f"<MsgId>10003</MsgId>"
+        "</xml>"
+    )
+    encrypt = wecom_crypto.encrypt_message(aes_key, inner, "corp_abc")
+    query, body = _wrap(encrypt, token, nonce)
+    resp = await adapter.handle_webhook(
+        "tenant_wecom_test", WebhookRequest(method="POST", query=query, body=body)
+    )
+    assert resp.body == "success"
+    assert resp.delivered_reply is None
+    assert len(runner.calls) == 0

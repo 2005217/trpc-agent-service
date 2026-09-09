@@ -1,10 +1,7 @@
-"""AgentRunner：封装 trpc_agent_sdk 的 Runner，提供文本化聊天接口。
-
-负责把 chat 层传来的 message/files 构造成 Content 流式输入，
-把 Runner 的事件流收敛为文本增量，并透传平台层 AgentContext
-（tenant_id / trace_id 等），供治理 Filter 与链路追踪使用。
-"""
+"""AgentRunner：封装 trpc_agent_sdk 的 Runner，提供文本化聊天接口。"""
 from __future__ import annotations
+
+import re
 
 from dataclasses import dataclass, field
 from typing import AsyncGenerator, List, Optional
@@ -16,16 +13,29 @@ from trpc_agent_sdk.runners import Runner
 from trpc_agent_sdk.sessions import BaseSessionService
 from trpc_agent_sdk.types import Content, Part
 
+THINK_TAG = re.compile(r"<tool_call>(.*?)<tool_call>", re.S)
+
 
 @dataclass
 class RunResult:
     """一次 Agent 运行的结构化结果。"""
 
     text: str = ""
+    reasoning: str = ""  # 思考过程（与正文分离，展示层可折叠）
     tool_calls: list = field(default_factory=list)
     tool_results: list = field(default_factory=list)
     error_type: str = ""
     error_message: str = ""
+
+
+def split_think_tags(text: str) -> tuple[str, str]:
+    """兜底剥离正文里的 <tool_call>...<tool_call> 标签（部分模型内联输出思考时命中）。"""
+    match = THINK_TAG.search(text)
+    if not match:
+        return text, ""
+    reasoning = match.group(1).strip()
+    body = (text[:match.start()] + text[match.end():]).strip()
+    return body, reasoning
 
 
 def _decode_file_data(data: str) -> bytes:
@@ -77,10 +87,7 @@ class AgentRunner:
         agent_context: Optional[AgentContext] = None,
         result: Optional[RunResult] = None,
     ) -> AsyncGenerator[str, None]:
-        """运行 Agent，按事件流增量产出回复文本。
-
-        result 非空时收集结构化信息（工具调用/错误）供审计使用。
-        """
+        """运行 Agent，按事件流增量产出回复文本。"""
         content = Content(parts=self._build_parts(message, files))
         outcome = result if result is not None else RunResult()
         async for event in self.runner.run_async(
@@ -103,8 +110,13 @@ class AgentRunner:
                 continue
             if event.content and event.content.parts:
                 for part in event.content.parts:
-                    if part.text:
-                        yield part.text
+                    if not part.text:
+                        continue
+                    if getattr(part, "thought", False):
+                        # 思考内容：收敛进 reasoning，不进正文
+                        outcome.reasoning += part.text
+                        continue
+                    yield part.text
 
     async def run(
         self,
@@ -122,6 +134,11 @@ class AgentRunner:
         ):
             chunks.append(text)
         outcome.text = "".join(chunks).strip()
+        # 兜底：部分模型把思考以 <tool_call>...<tool_call> 内联在正文里
+        outcome.text, inline_reasoning = split_think_tags(outcome.text)
+        if inline_reasoning:
+            outcome.reasoning = inline_reasoning + ("\n" + outcome.reasoning if outcome.reasoning else "")
+        outcome.reasoning = outcome.reasoning.strip()
         return outcome
 
     async def close(self) -> None:

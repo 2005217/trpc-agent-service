@@ -41,8 +41,7 @@ def test_default_app_name_prefixed():
 
 
 def test_manager_conflict_detected():
-    """绕过校验器制造非法状态（validate_assignment 未开启，构造后可直接改字段），
-    唯一性校验应能兜住。"""
+    """绕过校验器制造非法状态（validate_assignment 未开启，构造后可直接改字段），。"""
     manager = ConfigManager()
     a = TenantConfig(tenant_id="t1", name="a", app={"app_name": "x"})
     b = TenantConfig(tenant_id="t2", name="b", app={"app_name": "y"})

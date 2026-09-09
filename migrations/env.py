@@ -1,4 +1,4 @@
-from logging.config import fileConfig
+﻿from logging.config import fileConfig
 import os
 import sys
 from pathlib import Path
@@ -16,7 +16,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # alembic 进程不经过服务启动流程，需要自己加载 .env（密码不进仓库的同源策略）
 load_dotenv(dotenv_path=PROJECT_ROOT / ".env")
 
-from trpc_service.storage.tables import Base  # noqa: E402
+from trpc_service.tenant.storage.tables import Base  # noqa: E402
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

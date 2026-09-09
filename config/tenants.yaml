@@ -20,6 +20,19 @@ tenants:
       enabled: true
       mask_pii: true
       retention_days: 90
+    channels:
+      feishu:
+        enabled: false          # 真机接入时置 true 并填入飞书开放平台凭证
+        app_id: "cli_placeholder"
+        app_secret: "your_app_secret"
+        token: "your_verification_token"
+        encrypt_key: ""         # 配置后强制回调验签
+      wecom:
+        enabled: false          # 真机接入时置 true 并填入企业微信回调凭证
+        token: "your_wecom_token"
+        encoding_aes_key: "your_43char_encoding_aes_key"
+        corp_id: "your_corp_id"
+        bot_id: "your_bot_id"
     daily_api_calls: 10000
 
   - tenant_id: "tenant_002"
@@ -39,8 +52,18 @@ tenants:
       allowed_tools:
         - "search_code"
         - "query_docs"
+        - "skill_list"
+        - "skill_list_docs"
+        - "skill_list_tools"
+        - "skill_load"
+        - "skill_run"
+        - "skill_select_docs"
+        - "skill_select_tools"
     audit:
       enabled: true
       mask_pii: false
       retention_days: 30
     daily_api_calls: 5000
+    rate_limit_per_minute: 30
+    skills:
+      enabled: true

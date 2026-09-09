@@ -1,7 +1,4 @@
-"""租户配置管理器。
-
-持有加载后的租户配置，支持按文件 mtime 热加载与按 tenant_id 查询。
-"""
+"""租户配置管理器。"""
 from __future__ import annotations
 
 from pathlib import Path

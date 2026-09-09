@@ -37,8 +37,8 @@ class StorageConfig(BaseModel):
 
 class ChannelType(str, Enum):
     """通道类型"""
+    FEISHU = "feishu"
     WECOM = "wecom"
-    WECHAT_CS = "wechat_cs"
     TELEGRAM = "telegram"
     WEB = "web"
 
@@ -48,9 +48,13 @@ class ChannelConfig(BaseModel):
     enabled: bool = False
     bot_id: str = ""
     secret: str = ""
-    token: str = ""
+    token: str = ""  # 企微回调 Token / 飞书事件订阅 verification token
     corp_id: str = ""  # 企业微信 CorpID（回复加密的 receiveid）
     encoding_aes_key: str = ""  # 企业微信回调 EncodingAESKey（43 位）
+    # 飞书自建应用凭证
+    app_id: str = ""
+    app_secret: str = ""
+    encrypt_key: str = ""  # 飞书事件订阅 Encrypt Key（配置后强制验签）
 
 
 class AppConfig(BaseModel):
@@ -64,6 +68,23 @@ class ToolConfig(BaseModel):
     """工具权限配置"""
     allowed_tools: list[str] = Field(default_factory=list)
     blocked_tools: list[str] = Field(default_factory=list)
+
+
+class WorkspaceMode(str, Enum):
+    """沙箱模式"""
+    LOCAL = "local"
+    CONTAINER = "container"
+
+
+class WorkspaceConfig(BaseModel):
+    """工作区沙箱配置"""
+    mode: WorkspaceMode = WorkspaceMode.LOCAL
+    image: str = "python:3.13-slim"  # 容器沙箱镜像
+
+
+class SkillConfig(BaseModel):
+    """技能配置"""
+    enabled: bool = False
 
 
 class AuditConfig(BaseModel):
@@ -85,8 +106,12 @@ class TenantConfig(BaseModel):
     channels: dict[str, ChannelConfig] = Field(default_factory=dict)
     tools: ToolConfig = Field(default_factory=ToolConfig)
     audit: AuditConfig = Field(default_factory=AuditConfig)
+    workspace: WorkspaceConfig = Field(default_factory=WorkspaceConfig)
+    skills: SkillConfig = Field(default_factory=SkillConfig)
     daily_api_calls: int = 10000
     daily_token_budget: int = 1000000
+    rate_limit_per_minute: int = 0  # 每用户每分钟消息上限，0 = 不限制（IM 洪峰防护）
+    release_stage: str = "stable"  # 灰度发布阶段：canary（灰度先行）| stable（全量）
 
     @model_validator(mode="after")
     def _normalize_app_name(self):

@@ -1,7 +1,4 @@
-"""平台内置示例工具。
-
-这些工具用于演示工具白名单、危险工具二次确认等治理能力。
-"""
+"""平台内置示例工具。"""
 from __future__ import annotations
 
 from datetime import datetime, timedelta

@@ -3,7 +3,7 @@ import pytest
 import redis
 from fakeredis import FakeRedis
 
-from trpc_service.gateway.budget import BudgetExceeded, BudgetManager
+from trpc_service.tenant.budget import BudgetExceeded, BudgetManager
 
 
 def _mgr(fake=None) -> BudgetManager:
@@ -59,10 +59,7 @@ class _ExplodingRedis:
 
 
 def test_runtime_redis_failure_degrades_to_memory():
-    """运行期 Redis 故障 → 永久降级内存，服务不中断（budget.py 修复的回归测试）。
-
-    修复前的行为：check/record 直接抛 ConnectionError 穿透到聊天接口变 500。
-    """
+    """运行期 Redis 故障 → 永久降级内存，服务不中断（budget.py 修复的回归测试）。"""
     m = BudgetManager()
     m._redis = _ExplodingRedis()
     m.record("tenant_002", api_calls=2)   # Redis 炸 → 降级 → 本次走内存

@@ -1,11 +1,11 @@
-"""存储适配与审计服务测试。"""
+﻿"""存储适配与审计服务测试。"""
 import pytest
 
-from trpc_service.audit.model import AuditEvent
-from trpc_service.audit.redact import redact
-from trpc_service.audit.service import AuditService
+from trpc_service.tenant.audit.model import AuditEvent
+from trpc_service.tenant.audit.redact import redact
+from trpc_service.tenant.audit.service import AuditService
 from trpc_service.config.tenant_config import TenantConfig
-from trpc_service.storage.factory import create_storage
+from trpc_service.tenant.storage.factory import create_storage
 
 
 def test_create_storage_in_memory():

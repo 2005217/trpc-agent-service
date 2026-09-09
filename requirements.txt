@@ -9,11 +9,14 @@ PyYAML==6.0.3
 redis==8.1.0
 SQLAlchemy==2.0.52
 PyMySQL==1.2.0
+alembic==1.19.2
+cryptography==50.0.1  # 企微回调 AES-256-CBC（SDK 传递依赖，显式声明供 wecom_crypto 使用）
 opentelemetry-sdk==1.44.0
 opentelemetry-exporter-otlp-proto-http==1.44.0
 
 # 测试依赖
 pytest
 pytest-asyncio
+pytest-cov
 fakeredis
 flake8

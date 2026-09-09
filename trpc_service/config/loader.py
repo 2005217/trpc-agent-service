@@ -1,8 +1,4 @@
-"""租户配置加载。
-
-从 config/tenants.yaml 读取租户配置并应用环境变量覆盖
-（LLM api key / base_url / model 及存储连接串）。
-"""
+"""租户配置加载。"""
 from __future__ import annotations
 
 import os
@@ -26,11 +22,7 @@ def load_dotenv_if_present() -> None:
 
 
 def _apply_env_overrides(cfg: TenantConfig) -> TenantConfig:
-    """用环境变量覆盖租户模型配置。
-
-    优先级：租户 YAML 里显式配置的 api_key > 环境变量 > 空。
-    base_url / model_name 同理（URL / MODEL）。
-    """
+    """用环境变量覆盖租户模型配置。"""
     key = os.getenv("KEY") or os.getenv("API_KEY")
     url = os.getenv("URL") or os.getenv("BASE_URL")
     model = os.getenv("MODEL")

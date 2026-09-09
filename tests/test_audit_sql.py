@@ -1,12 +1,13 @@
+
 """②生产级审计/平台表测试：SQLite 注入验证 Database DI 与缓冲批量落库。"""
 
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from trpc_service.audit.model import AuditEvent
-from trpc_service.audit.service import AuditService
-from trpc_service.storage.database import Database
-from trpc_service.storage.tables import ChannelBindingRow, IdempotencyRow
+from trpc_service.tenant.audit.model import AuditEvent
+from trpc_service.tenant.audit.service import AuditService
+from trpc_service.tenant.storage.database import Database
+from trpc_service.tenant.storage.tables import ChannelBindingRow, IdempotencyRow
 
 
 @pytest.fixture()
@@ -37,19 +38,14 @@ async def test_emit_buffered_then_batch_insert(db, tmp_path):
     count = await service.flush()
     assert count == 3
     with db.session() as s:
-        from trpc_service.storage.tables import AuditLogRow
+        from trpc_service.tenant.storage.tables import AuditLogRow
         rows = s.query(AuditLogRow).all()
         assert len(rows) == 3
         assert {r.trace_id for r in rows} == {"tr0", "tr1", "tr2"}
 
 
 async def test_sql_failure_falls_back_to_file(tmp_path):
-    """SQL 写失败 → 整批降级落到 JSONL 文件（审计不丢）。
-
-    注意：不能用 engine.dispose() 模拟故障——SQLAlchemy 会惰性重连，
-    下一次操作照样成功；必须用真实不可达的目标（父目录不存在的
-    SQLite 路径在连接时必然报错）。
-    """
+    """SQL 写失败 → 整批降级落到 JSONL 文件（审计不丢）。"""
     bad_db = Database(f"sqlite:///{(tmp_path / 'no_such_dir' / 'x.db').as_posix()}")
     service = AuditService(audit_dir=tmp_path, db=bad_db)
     service.emit(_event())
@@ -77,21 +73,21 @@ def test_platform_table_constraints(db):
     """channel_binding 唯一键 + idempotency 幂等键的数据库约束。"""
     with db.session() as s:
         s.add(ChannelBindingRow(
-            tenant_id="t1", channel_type="wecom", external_user_id="u1",
+            tenant_id="t1", channel_type="feishu", external_user_id="u1",
             chat_id="", session_id="sess1",
         ))
-        s.add(IdempotencyRow(idempotency_key="wecom:10001"))
+        s.add(IdempotencyRow(idempotency_key="feishu:10001"))
     with pytest.raises(IntegrityError):
         # 重复绑定违反 uk_binding
         with db.session() as s:
             s.add(ChannelBindingRow(
-                tenant_id="t1", channel_type="wecom", external_user_id="u1",
+                tenant_id="t1", channel_type="feishu", external_user_id="u1",
                 chat_id="", session_id="sess2",
             ))
     with pytest.raises(IntegrityError):
         # 重复幂等键违反 uk_idem
         with db.session() as s:
-            s.add(IdempotencyRow(idempotency_key="wecom:10001"))
+            s.add(IdempotencyRow(idempotency_key="feishu:10001"))
 
 
 def test_emit_redacts_secrets_before_buffer(db, tmp_path):

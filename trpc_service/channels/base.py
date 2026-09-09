@@ -1,8 +1,4 @@
-"""通道适配器基类。
-
-统一各 IM 平台的 webhook 收发语义：入口报文 → 标准化文本请求 →
-Agent 执行 → 回复报文。租户在 tenants.yaml 的 channels 中配置。
-"""
+"""通道适配器基类。"""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

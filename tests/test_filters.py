@@ -1,11 +1,11 @@
-"""治理过滤器测试：白名单、脱敏、预算、危险确认。"""
+﻿"""治理过滤器测试：白名单、脱敏、预算、危险确认。"""
 from trpc_agent_sdk.filter import get_tool_filter
 from trpc_agent_sdk.tools._context_var import set_tool_var, reset_tool_var
 
-import trpc_service.filter  # noqa: F401  # 注册过滤器
-from trpc_service.filter.budget_limit import budget_manager
-from trpc_service.filter.pii_mask import mask_text
-from trpc_service.telemetry.context import build_agent_context
+import trpc_service.tenant.governance  # noqa: F401  # 注册过滤器
+from trpc_service.tenant.governance.budget_limit import budget_manager
+from trpc_service.tenant.governance.pii_mask import mask_text
+from trpc_service.metrics.context import build_agent_context
 
 
 class _FakeTool:
