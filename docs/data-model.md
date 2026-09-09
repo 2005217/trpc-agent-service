@@ -1,4 +1,4 @@
-# 数据模型设计
+﻿# 数据模型设计
 
 ## 1. 设计原则
 
@@ -8,43 +8,42 @@
 
 ## 2. 表结构（SQL DDL）
 
-### tenant — 租户
+### tenant — 租户（已实现，迁移 b3d7f2a91c4e + d5e9b0c3a7f1）
 ```sql
 CREATE TABLE tenant (
-  tenant_id      VARCHAR(36) PRIMARY KEY,
-  name           VARCHAR(128) NOT NULL,
-  status         VARCHAR(16) NOT NULL DEFAULT 'active',
-  config_json    JSON NOT NULL,            -- TenantConfig 序列化
-  config_version INT NOT NULL DEFAULT 1,
-  created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_tenant_version (tenant_id, config_version)
-);
-```
-
-### tenant_config — 配置版本（灰度/回滚）
-```sql
-CREATE TABLE tenant_config (
-  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
-  tenant_id   VARCHAR(36) NOT NULL,
-  version     INT NOT NULL,
-  config_json JSON NOT NULL,
-  created_by  VARCHAR(64) NOT NULL DEFAULT 'admin',
+  tenant_id   VARCHAR(36) PRIMARY KEY,
+  name        VARCHAR(128) NOT NULL,
+  status      VARCHAR(16) NOT NULL DEFAULT 'active',
+  config      JSON NOT NULL,           -- TenantConfig 完整快照
+  revision    INT NOT NULL DEFAULT 1,  -- 当前配置版本号
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uk_tenant_version (tenant_id, version)
+  updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 ```
 
-### app — 租户下的 Agent 应用
+### tenant_revision — 配置历史版本（灰度/回滚，只增不改）
 ```sql
-CREATE TABLE app (
-  tenant_id     VARCHAR(36) NOT NULL,
-  app_name      VARCHAR(64) NOT NULL,      -- 框架 Session key 前缀
-  instruction   TEXT NOT NULL,
-  model_provider VARCHAR(32) NOT NULL DEFAULT 'openai',
-  model_name    VARCHAR(64) NOT NULL,
-  PRIMARY KEY (tenant_id, app_name)
+CREATE TABLE tenant_revision (
+  id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id  VARCHAR(36) NOT NULL,
+  revision   INT NOT NULL,
+  config     JSON NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_tenant_revision (tenant_id, revision)
 );
+```
+
+### agent_app — 租户下的 Agent 应用（tenant 配置的应用级投影）
+```sql
+CREATE TABLE agent_app (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  app_name    VARCHAR(64) NOT NULL UNIQUE,  -- 框架 Session key 前缀，全局唯一
+  tenant_id   VARCHAR(36) NOT NULL,
+  instruction TEXT NOT NULL,
+  model_name  VARCHAR(64) NOT NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX ix_agent_app_tenant_id ON agent_app (tenant_id);
 ```
 
 ### session — 会话（逻辑视图；运行期由框架服务承载）
@@ -105,8 +104,8 @@ CREATE TABLE summary (
 CREATE TABLE channel_binding (
   id               BIGINT AUTO_INCREMENT PRIMARY KEY,
   tenant_id        VARCHAR(36) NOT NULL,
-  channel_type     VARCHAR(16) NOT NULL,   -- web / wecom
-  external_user_id VARCHAR(128) NOT NULL,  -- 企微 UserId
+  channel_type     VARCHAR(16) NOT NULL,   -- web / feishu / wecom
+  external_user_id VARCHAR(128) NOT NULL,  -- 飞书 open_id
   chat_id          VARCHAR(128) NOT NULL DEFAULT '',  -- 群聊 id
   session_id       VARCHAR(64) NOT NULL,
   status           VARCHAR(16) NOT NULL DEFAULT 'active',
@@ -153,20 +152,22 @@ CREATE TABLE idempotency (
 |----|----|------|
 | `session:{app}:{user}:{session_id}` | hash | 框架 RedisSessionService 管理 |
 | `memory:{app}:{user}` | list/zset | 框架 RedisMemoryService 管理 |
-| `idem:{channel}:{msg_id}` | string, SETNX + TTL 300s | 多节点消息去重 |
-| `budget:{tenant}:{yyyyMMdd}` | hash(api_calls/tokens), INCRBY | 多节点预算计数 |
-| `binding:{channel}:{external_user}` | hash | 用户-租户绑定缓存 |
+| `dedupe:{channel}:{msg_id}` | string, SETNX + EX 300s | 多节点消息去重（Deduper） |
+| `budget:{tenant}:{date}:calls` / `:tokens` | string, INCRBY + EX 48h | 多节点预算计数（BudgetManager） |
+| `ratelimit:{tenant}:{user}:{window}` | string, INCRBY + EX 120s | 每用户每分钟限流（RateLimiter） |
+| `trpc:chat:tasks` / `:processing` / `trpc:chat:result:{id}` | list / list / string(TTL 60s) | 队列模式任务与结果（worker.py） |
 
 ## 4. JSON Schema 层面对照
 
-TenantConfig（tenants.yaml ↔ config_json）字段：`tenant_id / name / status / app{app_name,description,instruction} / model{provider,model_name,api_key,base_url} / storage{session_backend,redis_url,sql_url} / channels{wecom{enabled,bot_id,secret,token,corp_id,encoding_aes_key}} / tools{allowed_tools,blocked_tools} / audit{enabled,mask_pii,retention_days} / daily_api_calls / daily_token_budget`。
+TenantConfig（tenants.yaml ↔ config_json）字段：`tenant_id / name / status / app{app_name,description,instruction} / model{provider,model_name,api_key,base_url,max_tokens,temperature} / storage{session_backend,memory_backend,redis_url,sql_url} / channels{feishu{enabled,app_id,app_secret,token,encrypt_key},wecom{enabled,bot_id,token,corp_id,encoding_aes_key}} / tools{allowed_tools,blocked_tools} / audit{enabled,log_level,mask_pii,retention_days} / workspace{mode,image} / skills{enabled} / daily_api_calls / daily_token_budget / rate_limit_per_minute / release_stage`。
 
 ## 5. 实体关系
 
 ```
-tenant 1─n app 1─n session 1─n message
+tenant 1─n agent_app 1─n session 1─n message
 tenant 1─n channel_binding（external_user_id → session_id）
 session 1─1 summary
 tenant 1─n memory（mem_key = {app}/{user}）
 tenant 1─n audit_log；message/audit_log 均携带 trace_id
+tenant 1─n tenant_revision（配置版本历史，回滚依据）
 ```

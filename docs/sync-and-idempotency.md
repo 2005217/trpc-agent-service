@@ -5,7 +5,7 @@
 | 数据 | 一致性要求 | 策略 |
 |------|-----------|------|
 | Session event 流 | 会话内有序、不丢 | append 语义，seq 单调递增，唯一索引兜底 |
-| Session state | 多节点并发写不覆盖 | 版本 CAS（expected_version），冲突重读合并重试 |
+| Session state | 多节点并发写不覆盖 | state_delta 键值合并（可交换，并发实测验证）；同键冲突由前端串行化兜底 |
 | Summary | 允许滞后 | 异步后置生成，最终一致 |
 | Memory | 写后读可见 | 写路径同步提交；读前 flush 本节点写队列 |
 | Audit Log | 不丢即可 | JSONL 文件兜底 + SQL 主存储 |
@@ -15,7 +15,7 @@
 
 - **事件追加**：`append_event` 天然 append 语义，`(session_id, seq)` 唯一索引保证不重不丢；seq 由会话内单调计数分配。
 - **state 更新**：`update_session` 携带 `expected_version`（乐观锁）。冲突时重读最新 state，按 event 的 `actions.state_delta` 合并后重试（state delta 为键值合并，天然可交换）。
-- **取舍**：单 session 高并发写极端场景（同用户双端同时发消息）允许短暂交错，最终一致；强一致需求场景由前端串行化（同一 session 同时只允许一个 in-flight 请求）。
+- **取舍（含实测结论）**：并发实测（tests/test_concurrent_session.py，InMemory 后端、5 协程×10 事件）验证：并发 append 50 事件不丢不重；并发 update 不同 state 键合并后全部存在（state_delta 键值合并可交换）。极端场景（同 session 双端同时发）允许短暂交错，最终一致；强一致需求场景由前端串行化（同一 session 同时只允许一个 in-flight 请求）。
 
 ## 3. event / state / summary 的更新顺序
 
@@ -44,10 +44,9 @@
 
 ## 6. IM 消息重复投递的幂等
 
-- **幂等键**：`{channel}:{external_msg_id}`（企微 MsgId 全局唯一）。
-- **第一层（进程内）**：`Deduper`（TTL 300s）内存去重，拦截企微 5 秒重试窗口内的重复回调。
-- **第二层（多节点）**：Redis `SET idem:{key} 1 NX EX 300`，原子占位。
-- **第三层（兜底）**：SQL `idempotency` 表唯一索引，插入冲突视为重复。
+- **幂等键**：`{channel}:{external_msg_id}`（飞书 message_id / 企微 MsgId 全局唯一）。
+- **第一层（多节点共享）**：`Deduper` Redis `SET dedupe:{key} 1 NX EX 300` 原子占位，多节点共享；未配置 Redis 或运行期故障时降级进程内内存 TTL 去重（拦截事件重投窗口内的重复回调）。
+- **第二层（兜底）**：SQL `idempotency` 表唯一索引（`feishu:{message_id}` / `wecom:{MsgId}`），插入冲突视为重复；进程重启丢失去重缓存后仍能拦截。
 - **语义**：重复消息直接返回 ACK `success`，不触发 Agent，不重复扣预算。
 
 ## 7. 各后端一致性取舍对比

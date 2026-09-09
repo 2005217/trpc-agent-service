@@ -1,13 +1,13 @@
-%% 系统架构图：多租户节点化 Agent 部署平台
+﻿%% 系统架构图：多租户节点化 Agent 部署平台
 flowchart TB
     subgraph Clients["接入方"]
         WEB["Web UI<br/>(FastAPI 静态页)"]
-        WECOM["企业微信"]
+        FEISHU["飞书"]`n        WECOM["企业微信"]
     end
 
     subgraph GatewayLayer["Agent Gateway（无状态，可水平扩展）"]
         CHAT["POST /api/v1/chat"]
-        WEBHOOK["POST /api/v1/channels/wecom/webhook/{tenant_id}"]
+        WEBHOOK["POST /api/v1/channels/feishu/webhook/{tenant_id}"]
         ADMIN["Admin API<br/>租户 CRUD / 审计查询"]
     end
 
@@ -15,7 +15,7 @@ flowchart TB
         ROUTER["SessionRouter<br/>sha1(tenant:channel:user[:chat])"]
         BUDGET["BudgetManager<br/>租户预算前置校验"]
         AUTHZ["UserAuthz<br/>channel_binding 校验"]
-        DEDUPE["Deduper<br/>MsgId 去重"]
+        DEDUPE["Deduper<br/>message_id 去重"]
     end
 
     subgraph WorkerLayer["Agent Worker（无状态）"]
@@ -44,7 +44,7 @@ flowchart TB
     end
 
     WEB --> CHAT
-    WECOM --> WEBHOOK
+    FEISHU --> WEBHOOK`n    WECOM --> WEBHOOK
     CHAT --> ROUTER --> BUDGET
     WEBHOOK --> DEDUPE --> AUTHZ --> ROUTER
     BUDGET --> RUNNER
