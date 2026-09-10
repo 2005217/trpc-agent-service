@@ -24,19 +24,19 @@ tenants:
       feishu:
         enabled: false          # 真机接入时置 true 并填入飞书开放平台凭证
         app_id: "cli_placeholder"
-        app_secret: "your_app_secret"
-        token: "your_verification_token"
+        app_secret: ""           # 凭证走 FEISHU_APP_SECRET 环境变量
+        token: ""                # 凭证走 FEISHU_TOKEN 环境变量
         encrypt_key: ""         # 配置后强制回调验签
       wecom_smartbot:
         enabled: true            # 智能机器人长连接（免公网）；Secret 走 WECOM_BOT_SECRET 环境变量
-        bot_id: "***REMOVED***"
+        bot_id: ""               # 凭证走 WECOM_SMARTBOT_ID 环境变量
         secret: ""
       wecom:
         enabled: true            # 真机测试中（勿提交凭证：测试完成后改为环境变量注入）
         token: ""                # 凭证走 WECOM_TOKEN 环境变量                # ← 企微后台「接收消息」配置页随机获取后填这里
         encoding_aes_key: ""     # 凭证走 WECOM_AES_KEY 环境变量     # ← 43 位 AESKey，同上
-        corp_id: "***REMOVED***"
-        bot_id: "***REMOVED***"        # AgentId
+        corp_id: ""              # 凭证走 WECOM_CORP_ID 环境变量
+        bot_id: ""               # 凭证走 WECOM_AGENT_ID 环境变量
     daily_api_calls: 10000
 
   - tenant_id: "tenant_002"

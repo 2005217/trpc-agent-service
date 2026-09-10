@@ -37,8 +37,13 @@ def _apply_env_overrides(cfg: TenantConfig) -> TenantConfig:
         cfg.storage.sql_url = sql_url
 
     channel_env = {
-        "wecom": {"token": "WECOM_TOKEN", "encoding_aes_key": "WECOM_AES_KEY"},
-        "wecom_smartbot": {"secret": "WECOM_BOT_SECRET"},
+        "wecom": {
+            "token": "WECOM_TOKEN",
+            "encoding_aes_key": "WECOM_AES_KEY",
+            "corp_id": "WECOM_CORP_ID",
+            "bot_id": "WECOM_AGENT_ID",
+        },
+        "wecom_smartbot": {"secret": "WECOM_BOT_SECRET", "bot_id": "WECOM_SMARTBOT_ID"},
         "feishu": {
             "app_secret": "FEISHU_APP_SECRET",
             "token": "FEISHU_TOKEN",
