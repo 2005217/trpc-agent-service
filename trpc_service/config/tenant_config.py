@@ -38,7 +38,8 @@ class StorageConfig(BaseModel):
 class ChannelType(str, Enum):
     """通道类型"""
     FEISHU = "feishu"
-    WECOM = "wecom"
+    WECOM = "wecom"                      # HTTP 回调被动回复（需公网+备案域名）
+    WECOM_SMARTBOT = "wecom_smartbot"    # 智能机器人长连接（免公网）
     TELEGRAM = "telegram"
     WEB = "web"
 

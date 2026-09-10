@@ -1,6 +1,6 @@
-﻿# trpc-agent-service：多租户节点化 Agent 部署平台
+# trpc-agent-service：多租户节点化 Agent 部署平台
 
-基于 [tRPC-Agent-Python](https://example.com/trpc-agent-py)（`trpc-agent-py`）构建的多租户 Agent 平台：多租户隔离、节点化部署、Redis/SQL 双后端、Web UI 与飞书/企业微信接入、治理过滤、指标审计、故障恢复。
+基于 [tRPC-Agent-Python](https://example.com/trpc-agent-py)（`trpc-agent-py`）构建的多租户 Agent 平台：多租户隔离、节点化部署、Redis/SQL 双后端、Web UI 与飞书/企业微信接入（含智能机器人长连接形态）、治理过滤、指标审计、故障恢复。
 
 ## 架构摘要
 
@@ -42,7 +42,7 @@ bash stop.sh
 |------|------|------|
 | inline（默认） | 无 | 单进程，零外部依赖，开发/演示 |
 | 队列分离 | `QUEUE_MODE=redis` + `REDIS_URL` | gateway 入队，`python -m trpc_service.worker` 无状态消费，加副本即扩容 |
-| 多节点共享状态 | `BUDGET_REDIS_URL` / `DEDUPE_REDIS_URL` / `RATE_LIMIT_REDIS_URL` | 预算/去重/限流跨节点共享，故障自动降级单机 |
+| 企微长连接 | `wecom_smartbot` 通道 | 智能机器人 BotID/Secret，WebSocket 长连接免公网（Secret 走 WECOM_BOT_SECRET 环境变量） |`n| 多节点共享状态 | `BUDGET_REDIS_URL` / `DEDUPE_REDIS_URL` / `RATE_LIMIT_REDIS_URL` | 预算/去重/限流跨节点共享，故障自动降级单机 |
 
 生产推荐：`docker compose -f deploy/docker-compose.yml up -d`（gateway + worker + Redis + MySQL + OTel Collector）。
 

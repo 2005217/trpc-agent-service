@@ -11,6 +11,8 @@ SQLAlchemy==2.0.52
 PyMySQL==1.2.0
 alembic==1.19.2
 cryptography==50.0.1  # 企微回调 AES-256-CBC（SDK 传递依赖，显式声明供 wecom_crypto 使用）
+nanobot-ai>=0.1.4.post5        # SDK openclaw/智能机器人生态（长连接协议复用）
+wecom-aibot-sdk-python>=0.1.5  # 企微智能机器人长连接官方 SDK
 opentelemetry-sdk==1.44.0
 opentelemetry-exporter-otlp-proto-http==1.44.0
 

@@ -29,6 +29,7 @@ from trpc_service.version import __version__
 from trpc_service.web.auth import require_admin_key, require_chat_key
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+_smartbot_channels: Dict[str, object] = {}
 
 
 class AppState:
@@ -94,7 +95,34 @@ async def lifespan(app: FastAPI):
         runner = state.build_runner(tenant_id)
         if runner:
             state.runners[tenant_id] = runner
+
+    # ---- 企微智能机器人长连接（免公网通道） ----
+    for tenant_id, tenant_config in state.config_manager.all().items():
+        smart_cfg = tenant_config.channels.get("wecom_smartbot")
+        if smart_cfg and smart_cfg.enabled:
+            from trpc_service.channels.wecom_smartbot import WeComSmartBotChannel
+
+            channel = WeComSmartBotChannel(
+                tenant_config=tenant_config,
+                channel_config=smart_cfg,
+                runner_getter=state.runners.get,
+                database=state.database,
+            )
+            try:
+                await channel.start()
+                _smartbot_channels[tenant_id] = channel
+            except Exception as exc:  # noqa: BLE001  单通道失败不阻断启动
+                from trpc_service.log import get_logger
+
+                get_logger("channels").error(
+                    "smartbot start failed tenant=%s err=%s", tenant_id, exc
+                )
     yield
+    for channel in _smartbot_channels.values():
+        try:
+            await channel.stop()
+        except Exception:  # noqa: BLE001
+            pass
     for runner in state.runners.values():
         await runner.close()
     await audit_service.stop()   # 关停前把审计缓冲刷净

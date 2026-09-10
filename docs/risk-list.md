@@ -1,4 +1,4 @@
-﻿# 生产风险清单（12 项）
+# 生产风险清单（12 项）
 
 | # | 风险 | 影响 | 缓解措施 |
 |---|------|------|---------|
@@ -11,7 +11,7 @@
 | 7 | **危险工具误执行** | 业务数据被误改/误删 | dangerous_confirm 过滤器强制二次确认（confirm=true 或会话内确认）；危险名单独立维护；审计记录 decision |
 | 8 | **PII 进入日志/trace/对话** | 合规风险 | mask_pii 租户开关 + 正则打码（手机/身份证/邮箱/密钥）；审计与输出双侧脱敏；trace 属性不含原文 |
 | 9 | **配置热加载错误配置全网生效** | 全部租户异常 | YAML 加载失败保持旧配置；租户配置版本化（tenant / tenant_revision 表）支持按 revision 回滚并热重建 Runner；Admin API 变更留痕 |
-| 10 | **IM 回调验签被绕过** | 伪造消息注入 | 飞书：SHA256 验签 + verification token；企微：SHA1 验签 + AES-256-CBC；均做协议回环测试，不符一律 403 |
+| 10 | **IM 回调验签被绕过** | 伪造消息注入 | 飞书：SHA256 验签 + verification token；企微：SHA1 验签 + AES-256-CBC；均做协议回环测试，不符一律 403；企微 HTTP 回调依赖备案域名，长连接形态免公网可作替代 |
 | 11 | **trace 无法串联定位问题** | 故障排查时长不可控 | trace_id 入口生成注入 AgentContext，贯穿 gateway→runner→tool→存储→IM 回复并写回审计；OTLP 上报 Jaeger |
 | 12 | **节点故障时在途请求丢失** | 用户感知回复丢失 | 队列模式（QUEUE_MODE=redis）：BRPOPLPUSH 保证崩溃任务留存 processing 列表可重放，结果键 TTL 回传；IM 场景依赖事件重投 + 三层幂等；Worker 无状态，重启无恢复成本 |
 

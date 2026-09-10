@@ -1,4 +1,4 @@
-# 系统架构设计：多租户节点化 Agent 部署平台
+﻿# 系统架构设计：多租户节点化 Agent 部署平台
 
 > 基于 tRPC-Agent-Python（trpc_agent_sdk 1.1.19）的多租户、可节点化部署、多后端数据同步、可接入飞书/企业微信的生产级 Agent 平台。
 
@@ -40,7 +40,7 @@
 |------|------|----------|
 | Agent Gateway | 统一入口：会话路由、预算前置校验、IM 验签解密去重、用户权限 | `web/` + `agent/routing.py` + `channels/` |
 | Agent Worker | 无状态执行体：Runner + Agent + 治理 Filter，可水平扩展 | `agent/` + `worker.py` + `tenant/governance/` |
-| Channel Adapter | IM 协议适配（Web UI / 飞书 / 企业微信） | `channels/` |
+| Channel Adapter | IM 协议适配（Web UI / 飞书 / 企微HTTP回调 / 企微智能机器人长连接） | `channels/` |
 | Storage Adapter | Session/Memory 三后端装配（InMemory/Redis/SQL）+ 后端延迟采集 | `tenant/storage/factory.py` |
 | Admin API | 租户 CRUD、热加载、版本回滚、灰度发布、审计与指标查询 | `web/app.py` |
 | Telemetry Collector | trace/指标收集上报（trace + metrics 双通道） | `metrics/` + `deploy/otel-config.yaml` |
@@ -115,8 +115,10 @@
 
 - **Web UI**：`POST /api/v1/chat` 同步返回聚合回复，`session_id` 维持多轮上下文。
 - **飞书（协议已实现，模拟验证）**：`channels/feishu.py` 实现事件订阅 v2.0：URL 验证（challenge 回传）、SHA256 验签（encrypt_key）、verification token 校验、message_id 去重、`open_id`→session 身份映射、群聊拼 chat_id 隔离、立即 ACK + 异步主动回复（tenant_access_token 鉴权，超长分片）。单聊 session=`sha1(tenant:feishu:open_id)`；群聊追加 chat_id。
-- **企业微信（协议已实现，模拟验证）**：`channels/wecom.py` 被动回复模式：URL 验证（echostr 解密）、SHA1 验签、AES-256-CBC 解密、MsgId 去重、`FromUserName`→session 身份映射、群聊拼 ChatId 隔离、加密被动回复与超长分片。单聊 session=`sha1(tenant:wecom:userid)`；群聊追加 ChatId。
-- **IM 平台限制应对（已实现）**：长度限制（1800 字分片）、重复投递（三层幂等）、频率限制（rate_limit_per_minute 每用户每分钟窗口计数，Redis 共享 + 内存降级）、图片/语音/视频/文件（识别类型友好回复引导文本对话，多媒体解析为预留）、失败重试（飞书事件重投 + 幂等拦截）。
+- **企业微信（两种形态，双轨可选）**：
+  - **形态一·HTTP 回调被动回复（已实现，模拟验证）**：`channels/wecom.py`——URL 验证（echostr 解密）、SHA1 验签、AES-256-CBC 解密、MsgId 三层幂等、`FromUserName`→session 身份映射、群聊拼 ChatId 隔离、加密被动回复与超长分片。单聊 session=`sha1(tenant:wecom:userid)`；群聊追加 ChatId。前置条件：回调 URL 域名备案主体须与企业一致（企微平台准入政策）。
+  - **形态二·智能机器人长连接（已实现，真机验证通过）**：`channels/wecom_smartbot.py`——基于 `wecom-aibot-sdk-python` 的 WSClient（BotID/Secret 登录 WebSocket，SDK 内置心跳/重连），消息桥接进统一管线（幂等→路由→限流→execute_chat→reply_stream 回复）。**免公网地址与备案域名**，无 5 秒回复限制；Secret 经 `WECOM_BOT_SECRET` 环境变量注入，同租户同 Bot 单连接（多节点经 Redis 抢占锁接管，演进项）。
+- **IM 平台限制应对（已实现）**：长度限制（企微被动回复 1800 字分片）、重复投递（三层幂等）、频率限制（rate_limit_per_minute 每用户每分钟窗口计数，Redis 共享 + 内存降级）、图片/语音/视频/文件（识别类型友好回复引导文本对话，多媒体解析为预留）、失败重试（飞书/企微事件重投 + 幂等拦截）。
 
 ## 6. 故障恢复与运维
 

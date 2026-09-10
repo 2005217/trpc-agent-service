@@ -46,7 +46,7 @@
 
 - **幂等键**：`{channel}:{external_msg_id}`（飞书 message_id / 企微 MsgId 全局唯一）。
 - **第一层（多节点共享）**：`Deduper` Redis `SET dedupe:{key} 1 NX EX 300` 原子占位，多节点共享；未配置 Redis 或运行期故障时降级进程内内存 TTL 去重（拦截事件重投窗口内的重复回调）。
-- **第二层（兜底）**：SQL `idempotency` 表唯一索引（`feishu:{message_id}` / `wecom:{MsgId}`），插入冲突视为重复；进程重启丢失去重缓存后仍能拦截。
+- **第二层（兜底）**：SQL `idempotency` 表唯一索引（`feishu:{message_id}` / `wecom:{MsgId}` / `wecom_smartbot:{msgid}`），插入冲突视为重复；进程重启丢失去重缓存后仍能拦截。
 - **语义**：重复消息直接返回 ACK `success`，不触发 Agent，不重复扣预算。
 
 ## 7. 各后端一致性取舍对比

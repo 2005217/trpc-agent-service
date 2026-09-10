@@ -1,4 +1,4 @@
-﻿# 数据模型设计
+# 数据模型设计
 
 ## 1. 设计原则
 
@@ -104,7 +104,7 @@ CREATE TABLE summary (
 CREATE TABLE channel_binding (
   id               BIGINT AUTO_INCREMENT PRIMARY KEY,
   tenant_id        VARCHAR(36) NOT NULL,
-  channel_type     VARCHAR(16) NOT NULL,   -- web / feishu / wecom
+  channel_type     VARCHAR(16) NOT NULL,   -- web / feishu / wecom / wecom_smartbot
   external_user_id VARCHAR(128) NOT NULL,  -- 飞书 open_id
   chat_id          VARCHAR(128) NOT NULL DEFAULT '',  -- 群聊 id
   session_id       VARCHAR(64) NOT NULL,
@@ -159,7 +159,7 @@ CREATE TABLE idempotency (
 
 ## 4. JSON Schema 层面对照
 
-TenantConfig（tenants.yaml ↔ config_json）字段：`tenant_id / name / status / app{app_name,description,instruction} / model{provider,model_name,api_key,base_url,max_tokens,temperature} / storage{session_backend,memory_backend,redis_url,sql_url} / channels{feishu{enabled,app_id,app_secret,token,encrypt_key},wecom{enabled,bot_id,token,corp_id,encoding_aes_key}} / tools{allowed_tools,blocked_tools} / audit{enabled,log_level,mask_pii,retention_days} / workspace{mode,image} / skills{enabled} / daily_api_calls / daily_token_budget / rate_limit_per_minute / release_stage`。
+TenantConfig（tenants.yaml ↔ config_json）字段：`tenant_id / name / status / app{app_name,description,instruction} / model{provider,model_name,api_key,base_url,max_tokens,temperature} / storage{session_backend,memory_backend,redis_url,sql_url} / channels{feishu{enabled,app_id,app_secret,token,encrypt_key},wecom{enabled,bot_id,token,corp_id,encoding_aes_key},wecom_smartbot{enabled,bot_id,secret}} / tools{allowed_tools,blocked_tools} / audit{enabled,log_level,mask_pii,retention_days} / workspace{mode,image} / skills{enabled} / daily_api_calls / daily_token_budget / rate_limit_per_minute / release_stage`。
 
 ## 5. 实体关系
 

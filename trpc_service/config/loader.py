@@ -22,7 +22,7 @@ def load_dotenv_if_present() -> None:
 
 
 def _apply_env_overrides(cfg: TenantConfig) -> TenantConfig:
-    """用环境变量覆盖租户模型配置。"""
+    """用环境变量覆盖租户配置（模型 + 通道凭证：yaml 留空占位，凭证不进仓库）。"""
     key = os.getenv("KEY") or os.getenv("API_KEY")
     url = os.getenv("URL") or os.getenv("BASE_URL")
     model = os.getenv("MODEL")
@@ -35,6 +35,25 @@ def _apply_env_overrides(cfg: TenantConfig) -> TenantConfig:
         cfg.model.model_name = model
     if sql_url and not cfg.storage.sql_url:
         cfg.storage.sql_url = sql_url
+
+    channel_env = {
+        "wecom": {"token": "WECOM_TOKEN", "encoding_aes_key": "WECOM_AES_KEY"},
+        "wecom_smartbot": {"secret": "WECOM_BOT_SECRET"},
+        "feishu": {
+            "app_secret": "FEISHU_APP_SECRET",
+            "token": "FEISHU_TOKEN",
+            "encrypt_key": "FEISHU_ENCRYPT_KEY",
+        },
+    }
+    for name, cfg_channel in cfg.channels.items():
+        env_map = channel_env.get(name)
+        if not env_map:
+            continue
+        for field, env_name in env_map.items():
+            if getattr(cfg_channel, field, "") == "":
+                value = os.getenv(env_name, "")
+                if value:
+                    setattr(cfg_channel, field, value)
     return cfg
 
 
