@@ -10,4 +10,5 @@
 | [memory.md](memory.md) | Memory 子系统设计（LoadMemoryTool、跨节点可见性） |
 | [framework_api.md](framework_api.md) | trpc-agent-py 框架能力与平台复用边界 |
 | [mermaid/architecture.mermaid](mermaid/architecture.mermaid) | 系统架构图 |
-| [mermaid/sequence.mermaid](mermaid/sequence.mermaid) | 核心时序图（企业微信消息 → Agent → Tool → Session/Memory → IM 回复） |`n| [mermaid/sequence-feishu.mermaid](mermaid/sequence-feishu.mermaid) | 飞书链路时序图（事件订阅 ACK + 异步主动回复） |
+| [mermaid/sequence.mermaid](mermaid/sequence.mermaid) | 核心时序图（企业微信消息 → Agent → Tool → Session/Memory → IM 回复） |
+| [mermaid/sequence-feishu.mermaid](mermaid/sequence-feishu.mermaid) | 飞书链路时序图（事件订阅 ACK + 异步主动回复） |

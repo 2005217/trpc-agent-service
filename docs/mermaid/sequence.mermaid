@@ -1,1 +1,21 @@
-﻿%% 核心时序图：企业微信用户发消息 → Agent 执行 → Tool 调用 → Session/Memory 写入 → IM 回复sequenceDiagram    autonumber    participant U as 企业微信用户    participant W as 企微回调服务    participant GW as Gateway<br/>(WeComAdapter)    participant D as Deduper    participant B as channel_binding    participant R as AgentRunner    participant A as LlmAgent    participant F as Filter 链<br/>(白名单/脱敏/预算/二次确认)    participant T as FunctionTool<br/>(query_order)    participant S as Storage<br/>(Redis/SQL Session+Memory)    participant OT as OTel    participant AU as AuditService    U->>W: 发送文本消息    W->>GW: POST 加密 XML<br/>(msg_signature, timestamp, nonce)    Note over GW: 生成 trace_id（入口 span 开始）    GW->>OT: span: gateway.verify    GW->>GW: SHA1 验签 + AES-256-CBC 解密    GW->>D: 幂等检查 idem:wecom:{MsgId}    alt 重复消息        D-->>GW: 已处理        GW-->>W: ACK success（不触发 Agent）    end    GW->>B: 绑定校验 external_user→session_id    GW->>S: 读 Session（{app}/{user} key）    GW->>R: run_async(user_id, session_id, Content, agent_context{trace_id,tenant})    Note over OT: span: invocation（父 span）    R->>A: agent_run    A->>OT: span: call_llm（gen_ai 指标）    A->>A: 决定调用 query_order    A->>F: 工具调用拦截链    F->>F: 白名单 ✓ / 入参脱敏 / 预算 ✓    A->>T: execute_tool(args)    Note over OT: span: execute_tool    T-->>A: 订单状态结果    A->>OT: span: call_llm（汇总工具结果）    A-->>R: 最终回复 Event（非 partial）    R->>S: append_event（seq 单调）→ update state → 异步 summary    R->>S: post-turn: store_session → Memory 写入    R-->>GW: 回复文本    GW->>GW: 输出脱敏（mask_pii）    GW->>GW: 回复 XML → AES 加密 → 签名    GW->>AU: 审计落盘（tenant/channel/user/session/tool/decision/latency/error_type/cost/trace_id）    GW-->>W: 加密被动回复 XML    W-->>U: 消息回复    Note over OT: trace_id 贯穿 1-18 全链路，可按 trace_id 在 Jaeger 聚合查看
+﻿%% 核心时序图（关键链路）：企微用户发消息 → Agent → Tool → Session/Memory → 回复
+sequenceDiagram
+    autonumber
+    participant U as 企微用户
+    participant GW as 通道适配 + 网关
+    participant AG as AgentRunner<br/>(LlmAgent + 治理 Filter)
+    participant T as Tool
+    participant S as Redis/SQL<br/>Session·Memory
+    participant AU as 审计/指标
+
+    U->>GW: 发消息（HTTP 回调 / 长连接）
+    GW->>GW: 验签 → 幂等去重 → 限流/预算校验
+    GW->>S: 读会话上下文
+    GW->>AG: run(agent_context{trace_id})
+    AG->>AG: 决定调用 query_order<br/>(白名单✓ 脱敏✓ 预算✓)
+    AG->>T: execute_tool
+    T-->>AG: 订单结果
+    AG->>S: append_event → state → 异步 summary → Memory 写入
+    AG-->>GW: 回复文本（输出脱敏）
+    GW->>AU: 审计落盘 + 指标（同一 trace_id）
+    GW-->>U: 回复消息
